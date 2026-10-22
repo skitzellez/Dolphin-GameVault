@@ -9,12 +9,12 @@
 	<Identity
     Name="GamerDad.DolphinForGameVault"
     Publisher="CN=GamerDad"
-    Version="1.1.9.120" />
+    Version="1.1.9.121" />
   <mp:PhoneIdentity PhoneProductId="5cf0a5ca-18d0-474c-88f6-a43117a219d0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
 	<Properties>
-    <DisplayName>Dolphin for Game Vault</DisplayName>
-    <PublisherDisplayName>Skitzelles (Dolphin Emulator build)</PublisherDisplayName>
+    <DisplayName>Game Vault · GameCube (Dolphin)</DisplayName>
+    <PublisherDisplayName>Skitzelles</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -28,7 +28,7 @@
 
 	<Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="DolphinUWP.App" uap18:TrustLevel="mediumIL">
-      <uap:VisualElements DisplayName="Dolphin for Game Vault" Description="An emulator for the Nintendo GameCube and Wii consoles! GameCube and Wii are trademarks of Nintendo. Dolphin Emulator is not affiliated with Nintendo."
+      <uap:VisualElements DisplayName="Game Vault · GameCube (Dolphin)" Description="An emulator for the Nintendo GameCube and Wii consoles! GameCube and Wii are trademarks of Nintendo. Dolphin Emulator is not affiliated with Nintendo."
         Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" BackgroundColor="transparent">
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
         <uap:DefaultTile/>
