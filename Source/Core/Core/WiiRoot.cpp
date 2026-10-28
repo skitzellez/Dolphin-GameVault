@@ -300,8 +300,16 @@ static bool CopySysmenuFilesToFS(FS::FileSystem* fs, const std::string& host_sou
     else
     {
       // Do not overwrite any existing files.
-      if (fs->GetMetadata(IOS::SYSMENU_UID, IOS::SYSMENU_UID, nand_path).Succeeded())
-        continue;
+      // Game Vault: except an empty one. On the Xbox an empty wc24recv.ctl was left on the NAND, and Mario Kart Wii
+      // then stopped at "Could not write to/read from Wii system memory" on every start (2026-10-28).
+      const auto existing = fs->GetMetadata(IOS::SYSMENU_UID, IOS::SYSMENU_UID, nand_path);
+      if (existing.Succeeded())
+      {
+        if (existing->size != 0)
+          continue;
+        WARN_LOG_FMT(CORE, "Replacing empty {} on the NAND", nand_path);
+        fs->Delete(IOS::SYSMENU_UID, IOS::SYSMENU_GID, nand_path);
+      }
 
       File::IOFile host_file{host_path, "rb"};
       std::vector<u8> file_data(host_file.GetSize());
