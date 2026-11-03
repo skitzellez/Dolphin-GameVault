@@ -110,9 +110,12 @@ static std::string ShareKey(std::string path)
   return path;
 }
 
+// Without a token (Game Vault could not share the file: 0x80070057 on an Xbox One S, GitHub Dolphin-GameVault #1),
+// or when it cannot be redeemed, the file is asked for through the Storage API (broadFileSystemAccess), which
+// takes another way to the drive than the plain and FromApp file calls that said "does not exist" there.
 static void* OpenGameVaultShare(const std::string& path)
 {
-  if (g_share_token.empty() || ShareKey(path) != g_share_path)
+  if (g_share_path.empty() || ShareKey(path) != g_share_path)
     return nullptr;
   std::lock_guard<std::mutex> lock(g_share_lock);
   HANDLE result = nullptr;
@@ -122,11 +125,24 @@ static void* OpenGameVaultShare(const std::string& path)
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
     try
     {
+      if (!g_share_file && !g_share_token.empty())
+      {
+        try
+        {
+          g_share_file = Windows::ApplicationModel::DataTransfer::SharedStorageAccessManager::
+                             RedeemTokenForFileAsync(g_share_token)
+                                 .get();
+        }
+        catch (...)
+        {
+        }
+      }
       if (!g_share_file)
       {
-        g_share_file = Windows::ApplicationModel::DataTransfer::SharedStorageAccessManager::
-                           RedeemTokenForFileAsync(g_share_token)
-                               .get();
+        g_share_file = winrt::Windows::Storage::StorageFile::GetFileFromPathAsync(
+                           winrt::to_hstring(g_share_path))
+                           .get();
+        NOTICE_LOG_FMT(CORE, "Game Vault trace: game file reached through the Storage API");
       }
       HANDLE h = nullptr;
       if (SUCCEEDED(g_share_file.as<GV_IStorageItemHandleAccess>()->Create(GV_HAO_READ, GV_HSO_SHARE_READ,
@@ -765,11 +781,11 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
     GvLog("step: controllers ready");
 
     std::string gamePath = filePath.str();
-    if (!g_share_token.empty() && !gamePath.empty())
+    if (!gamePath.empty())   // the file through the share token or the Storage API, when plain calls fail
     {
       // test switch LocalState\share-test.txt: boot a path that cannot be opened, so the game is read the way a
       // refused drive's is (only through the shared file)
-      if (File::Exists(File::GetUserPath(D_USER_IDX) + "share-test.txt"))
+      if (!g_share_token.empty() && File::Exists(File::GetUserPath(D_USER_IDX) + "share-test.txt"))
       {
         gamePath = "Z:\\gv-share-test\\" + gamePath.substr(gamePath.find_last_of("\\/") + 1);
         NOTICE_LOG_FMT(CORE, "Game Vault trace: share test, booting {}", gamePath);
