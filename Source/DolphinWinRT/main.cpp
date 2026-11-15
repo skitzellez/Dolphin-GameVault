@@ -46,7 +46,9 @@
 #include "Common/Logging/Log.h"
 #include "Common/Logging/LogManager.h"
 
+#include "Common/Config/Config.h"
 #include "Core/Boot/Boot.h"
+#include "Core/Config/GraphicsSettings.h"
 #include "Core/BootManager.h"
 #include "Core/Core.h"
 #include "Core/HW/ProcessorInterface.h"
@@ -699,6 +701,7 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
                   const winrt::Windows::ApplicationModel::Activation::IActivatedEventArgs& args)
   {
     std::stringstream filePath;
+    bool gv_fsr = false;   // fsr=1 in Game Vault's link
     GvOpenLog();
     GvLog(fmt::format("activated: kind {}, previous state {}", static_cast<int>(args.Kind()),
                       static_cast<int>(args.PreviousExecutionState())));
@@ -744,6 +747,11 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
         {
           g_share_token = arg.Value();
         }
+        else if (arg.Name() == winrt::hstring(L"fsr"))
+        {
+          // Game Vault's "Sharper picture (FSR)": Sys\Shaders\gv_fsr.glsl for this session (applied below)
+          gv_fsr = arg.Value() == L"1";
+        }
       }
     }
 
@@ -777,6 +785,12 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
     UICommon::Init();
     GvHookLog();
     GvLog("step: settings loaded");
+    if (gv_fsr)
+    {
+      // the current layer only: never written to GFX.ini, so the player's own post-processing comes back
+      Config::SetCurrent(Config::GFX_ENHANCE_POST_SHADER, std::string("gv_fsr"));
+      GvLog("link: Sharper picture (FSR) on");
+    }
     UICommon::InitControllers({});
     GvLog("step: controllers ready");
 
