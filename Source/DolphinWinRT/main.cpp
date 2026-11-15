@@ -41,6 +41,7 @@
 
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
+#include "Common/IniFile.h"
 #include "Common/WindowSystemInfo.h"
 #include "Common/Flag.h"
 #include "Common/Logging/Log.h"
@@ -702,6 +703,7 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
   {
     std::stringstream filePath;
     bool gv_fsr = false;   // fsr=1 in Game Vault's link
+    int gv_fsr_pct = 0;    // fsrs=<percent>: its strength
     GvOpenLog();
     GvLog(fmt::format("activated: kind {}, previous state {}", static_cast<int>(args.Kind()),
                       static_cast<int>(args.PreviousExecutionState())));
@@ -752,6 +754,10 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
           // Game Vault's "Sharper picture (FSR)": Sys\Shaders\gv_fsr.glsl for this session (applied below)
           gv_fsr = arg.Value() == L"1";
         }
+        else if (arg.Name() == winrt::hstring(L"fsrs"))
+        {
+          gv_fsr_pct = _wtoi(arg.Value().c_str());
+        }
       }
     }
 
@@ -790,6 +796,17 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
       // the current layer only: never written to GFX.ini, so the player's own post-processing comes back
       Config::SetCurrent(Config::GFX_ENHANCE_POST_SHADER, std::string("gv_fsr"));
       GvLog("link: Sharper picture (FSR) on");
+      if (gv_fsr_pct > 0 && gv_fsr_pct <= 100)
+      {
+        // the strength: gv_fsr.glsl's GV_SHARP (0.1..1.0), read from Dolphin.ini [gv_fsr-options] when the
+        // shader loads; only our own shader uses that section
+        Common::IniFile ini;
+        const std::string ini_path = File::GetUserPath(F_DOLPHINCONFIG_IDX);
+        ini.Load(ini_path);
+        ini.GetOrCreateSection("gv_fsr-options")->Set("GV_SHARP", fmt::format("{:.2f}", gv_fsr_pct / 100.0));
+        ini.Save(ini_path);
+        GvLog(fmt::format("link: FSR strength {}%", gv_fsr_pct));
+      }
     }
     UICommon::InitControllers({});
     GvLog("step: controllers ready");

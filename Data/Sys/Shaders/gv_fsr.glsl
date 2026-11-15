@@ -1,5 +1,6 @@
 // AMD FidelityFX Super Resolution 1 - EASU (edge adaptive spatial upsampling), one pass, for Dolphin for Game Vault.
-// Game Vault's "Sharper picture (FSR)" option turns it on for a session (fsr=1 in the start link).
+// Game Vault's "Sharper picture (FSR)" option turns it on for a session (fsr=1 in the start link); its strength
+// (fsrs=<percent>) is GV_SHARP, written to Dolphin.ini [gv_fsr-options] by DolphinWinRT/main.cpp.
 //
 // Ported from libretro/slang-shaders edge-smoothing/fsr/shaders/fsr-pass0.slang (Unlicense), which inlines the
 // EASU filter of AMD's ffx_fsr1.h: Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
@@ -13,6 +14,13 @@
 
 /*
 [configuration]
+[OptionRangeFloat]
+GUIName = Sharpness
+OptionName = GV_SHARP
+MinValue = 0.0
+MaxValue = 1.0
+StepAmount = 0.1
+DefaultValue = 0.5
 [/configuration]
 */
 
@@ -123,5 +131,10 @@ void main()
 
   // de-ring: never outside the four nearest input pixels
   float3 pix = min(max4, max(min4, aC / aW));
+
+  // sharpen (Game Vault's FSR strength, 0..1): push away from the plain bilinear blend of the four nearest input
+  // pixels, kept inside their range so edges get no halo (the same limit as AMD's CAS/RCAS)
+  float3 bil = mix(mix(f, g, pp.x), mix(j, k, pp.x), pp.y);
+  pix = min(max4, max(min4, pix + 2.0 * GetOption(GV_SHARP) * (pix - bil)));
   SetOutput(float4(pix, 1.0));
 }
