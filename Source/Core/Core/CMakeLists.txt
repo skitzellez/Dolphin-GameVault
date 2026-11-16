@@ -54,6 +54,8 @@ add_library(core
   ConfigLoaders/NetPlayConfigLoader.cpp
   ConfigLoaders/NetPlayConfigLoader.h
   ConfigManager.cpp
+  GameVaultAutoPad.cpp
+  GameVaultAutoPad.h
   ConfigManager.h
   Core.cpp
   Core.h

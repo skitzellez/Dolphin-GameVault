@@ -183,6 +183,10 @@ public:
   void BuildDesiredExtensionState(DesiredExtensionState* target_state) override;
   void Update(const DesiredExtensionState& target_state) override;
   void Reset() override;
+#if WINRT_XBOX
+  // Game Vault: an Xbox pad layout (Classic had no defaults, so it did nothing until mapped by hand)
+  void LoadDefaults() override;
+#endif
 
   ControllerEmu::ControlGroup* GetGroup(ClassicGroup group);
 

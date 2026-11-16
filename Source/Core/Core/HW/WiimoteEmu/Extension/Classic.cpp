@@ -82,6 +82,37 @@ Classic::Classic() : Extension1stParty("Classic", _trans("Classic Controller"))
   }
 }
 
+#if WINRT_XBOX
+// Game Vault: buttons by their printed letter (A = A, B = B ...), the Classic's ZL/ZR on the bumpers and its L/R on
+// the triggers. No device is named, so these follow the Wii Remote's default device (WGInput/<player>).
+void Classic::LoadDefaults()
+{
+  const char* buttons[] = {"`Button A`", "`Button B`", "`Button X`", "`Button Y`",
+                           "`Bumper L`", "`Bumper R`", "`View`",     "`Menu`",
+                           "`Menu & View`"};
+  for (size_t i = 0; i < std::size(buttons); i++)
+    m_buttons->SetControlExpression(int(i), buttons[i]);
+
+  const char* left[] = {"`Left Y+`", "`Left Y-`", "`Left X-`", "`Left X+`"};
+  const char* right[] = {"`Right Y+`", "`Right Y-`", "`Right X-`", "`Right X+`"};
+  for (int i = 0; i < 4; i++)
+  {
+    m_left_stick->SetControlExpression(i, left[i]);
+    m_right_stick->SetControlExpression(i, right[i]);
+  }
+
+  // L, R (digital = pulled most of the way), L-Analog, R-Analog
+  m_triggers->SetControlExpression(0, "`Trigger L` > 0.8");
+  m_triggers->SetControlExpression(1, "`Trigger R` > 0.8");
+  m_triggers->SetControlExpression(2, "`Trigger L`");
+  m_triggers->SetControlExpression(3, "`Trigger R`");
+
+  const char* dpad[] = {"`Pad N`", "`Pad S`", "`Pad W`", "`Pad E`"};
+  for (int i = 0; i < 4; i++)
+    m_dpad->SetControlExpression(i, dpad[i]);
+}
+#endif
+
 void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 {
   using ControllerEmu::MapFloat;

@@ -145,6 +145,13 @@ public:
 
   void LoadDefaults(const ControllerInterface& ciface) override;
 
+#if WINRT_XBOX
+  // Game Vault: sets this Wii Remote up for the controller a game is played with (Core/GameVaultAutoPad.cpp).
+  // pick: 'C' Classic Controller, 'N' Wii Remote + Nunchuk, 'W' Wii Remote alone (held sideways).
+  // Returns what it did, for the log.
+  std::string GvAutoSetup(char pick, const ControllerInterface& ciface);
+#endif
+
   ControllerEmu::ControlGroup* GetWiimoteGroup(WiimoteGroup group) const;
   ControllerEmu::ControlGroup* GetNunchukGroup(NunchukGroup group) const;
   ControllerEmu::ControlGroup* GetClassicGroup(ClassicGroup group) const;

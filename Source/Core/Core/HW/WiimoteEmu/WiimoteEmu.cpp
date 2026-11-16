@@ -846,6 +846,81 @@ void Wiimote::LoadDefaults(const ControllerInterface& ciface)
   m_attachments->GetAttachmentList()[DEFAULT_EXT]->LoadDefaults();
 }
 
+#if WINRT_XBOX
+// A control the player has not mapped still holds Dolphin's mouse default or nothing at all.
+static bool GvUnmapped(const std::string& expression)
+{
+  return expression.empty() || expression == "`Click 2`" || expression == "`Middle Click`";
+}
+
+std::string Wiimote::GvAutoSetup(char pick, const ControllerInterface& ciface)
+{
+  std::string done;
+  // a player with nothing mapped at all (players 2-4 in settings saved before they had a pad) gets the defaults
+  if (m_buttons->controls[0]->control_ref->GetExpression().empty())
+  {
+    LoadDefaults(ciface);
+    done += "defaults loaded, ";
+  }
+
+  const std::string pad = "WGInput/" + std::to_string(m_index) + "/Xbox One Game Controller:";
+  const auto on = [&](const char* name) { return "`" + pad + name + "`"; };
+
+  // shake on the right bumper (the Nunchuk's on the left), unless the player mapped shake themselves
+  for (auto& c : m_shake->controls)
+    if (GvUnmapped(c->control_ref->GetExpression()))
+      c->control_ref->SetExpression(on("Bumper R"));
+
+  ExtensionNumber ext = ExtensionNumber::NUNCHUK;
+  bool sideways = false;
+  if (pick == 'C')
+  {
+    ext = ExtensionNumber::CLASSIC;
+    auto* classic = m_attachments->GetAttachmentList()[ExtensionNumber::CLASSIC].get();
+    // only when the Classic was never mapped: a player's own layout stays
+    auto* buttons = static_cast<Classic*>(classic)->GetGroup(ClassicGroup::Buttons);
+    if (buttons->controls[0]->control_ref->GetExpression().empty())
+    {
+      classic->LoadDefaults();
+      done += "Classic layout set, ";
+    }
+  }
+  else if (pick == 'W')
+  {
+    ext = ExtensionNumber::NONE;
+    sideways = true;
+    // held sideways: 2 (jump in most such games) on A, 1 on B and X, the Remote's A on Y, its B on the right
+    // trigger; the left stick moves the D-pad too
+    m_buttons->SetControlExpression(0, on("Button Y"));
+    m_buttons->SetControlExpression(1, on("Trigger R"));
+    m_buttons->SetControlExpression(2, on("Button B") + " | " + on("Button X"));
+    m_buttons->SetControlExpression(3, on("Button A"));
+    const char* dpad[] = {"Pad N", "Pad S", "Pad W", "Pad E"};
+    const char* stick[] = {"Left Y+", "Left Y-", "Left X-", "Left X+"};
+    for (int i = 0; i < 4; i++)
+      m_dpad->SetControlExpression(i, on(dpad[i]) + " | " + on(stick[i]));
+  }
+  else
+  {
+    auto* nunchuk = static_cast<Nunchuk*>(m_attachments->GetAttachmentList()[ExtensionNumber::NUNCHUK].get());
+    if (nunchuk->GetGroup(NunchukGroup::Buttons)->controls[0]->control_ref->GetExpression().empty())
+    {
+      nunchuk->LoadDefaults();
+      done += "Nunchuk layout set, ";
+    }
+    for (auto& c : nunchuk->GetGroup(NunchukGroup::Shake)->controls)
+      if (GvUnmapped(c->control_ref->GetExpression()))
+        c->control_ref->SetExpression(on("Bumper L"));
+  }
+
+  m_attachments->SetSelectedAttachment(ext);
+  m_sideways_setting.SetValue(sideways);
+  UpdateReferences(ciface);
+  return done + (ext == ExtensionNumber::CLASSIC ? "Classic Controller" :
+                 ext == ExtensionNumber::NUNCHUK ? "Wii Remote + Nunchuk" : "Wii Remote sideways");
+}
+#endif
+
 Extension* Wiimote::GetNoneExtension() const
 {
   return static_cast<Extension*>(m_attachments->GetAttachmentList()[ExtensionNumber::NONE].get());

@@ -210,6 +210,7 @@
     <ClInclude Include="Core\ConfigLoaders\MovieConfigLoader.h" />
     <ClInclude Include="Core\ConfigLoaders\NetPlayConfigLoader.h" />
     <ClInclude Include="Core\ConfigManager.h" />
+    <ClInclude Include="Core\GameVaultAutoPad.h" />
     <ClInclude Include="Core\Core.h" />
     <ClInclude Include="Core\CoreTiming.h" />
     <ClInclude Include="Core\CPUThreadConfigCallback.h" />
@@ -894,6 +895,7 @@
     <ClCompile Include="Core\ConfigLoaders\MovieConfigLoader.cpp" />
     <ClCompile Include="Core\ConfigLoaders\NetPlayConfigLoader.cpp" />
     <ClCompile Include="Core\ConfigManager.cpp" />
+    <ClCompile Include="Core\GameVaultAutoPad.cpp" />
     <ClCompile Include="Core\Core.cpp" />
     <ClCompile Include="Core\CoreTiming.cpp" />
     <ClCompile Include="Core\CPUThreadConfigCallback.cpp" />

@@ -39,6 +39,7 @@
 #include "Core/Config/SYSCONFSettings.h"
 #include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/Core.h"
+#include "Core/GameVaultAutoPad.h"
 #include "Core/DolphinAnalytics.h"
 #include "Core/FifoPlayer/FifoDataFile.h"
 #include "Core/HLE/HLE.h"
@@ -259,6 +260,7 @@ void SConfig::OnESTitleChanged()
   if (system.IsWii() && !Config::Get(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED))
   {
     Wiimote::LoadConfig();
+    GameVault::AutoPad(SConfig::GetInstance().GetGameID());  // Game Vault: the controller this game is played with
   }
 
   ReloadTextures(system);
