@@ -24,6 +24,7 @@
 
 #include <fmt/format.h>
 
+#include "Common/GvTestKeys.h"
 #include "Common/HRWrap.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
@@ -205,7 +206,11 @@ private:
   {
   public:
     explicit Button(const ButtonValueType* button) : m_button(*button) {}
-    ControlState GetState() const override { return ControlState(m_button != 0); }
+    ControlState GetState() const override
+    {
+      // Game Vault test hook (Common/GvTestKeys.h): a test script can hold this button in a game too
+      return ControlState(m_button != 0 || GvTest::Pressed(GetName()));
+    }
 
   private:
     const ButtonValueType& m_button;
@@ -243,7 +248,12 @@ private:
     {
     }
 
-    ControlState GetState() const override { return ControlState(m_axis - m_base) / m_range; }
+    ControlState GetState() const override
+    {
+      if (GvTest::Pressed(GetName()))  // Game Vault test hook: "Left X-" = stick fully left, "Trigger R" = pulled
+        return 1.0;
+      return ControlState(m_axis - m_base) / m_range;
+    }
 
   protected:
     const double m_base;

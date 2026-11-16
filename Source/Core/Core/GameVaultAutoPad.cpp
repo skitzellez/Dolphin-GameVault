@@ -53,6 +53,13 @@ static char LookUp(const std::string& id)
   return 0;
 }
 
+static void Note(const std::string& line)
+{
+  NOTICE_LOG_FMT(CORE, "Game Vault auto controller: {}", line);
+  File::WriteStringToFile(File::GetUserPath(D_LOGS_IDX) + "gv-autopad.txt",
+                          "Game Vault auto controller: " + line + "\n");
+}
+
 static int XboxPads()
 {
   int pads = 0;
@@ -65,28 +72,31 @@ static int XboxPads()
 void AutoPad(const std::string& game_id)
 {
   if (game_id.size() < 4 || game_id == "00000000")
+  {
+    Note("no game id (\"" + game_id + "\")");
     return;
+  }
   if (File::Exists(File::GetUserPath(D_CONFIG_IDX) + "gv-autopad-off.txt"))
   {
-    NOTICE_LOG_FMT(CORE, "Game Vault auto controller: off (Config/gv-autopad-off.txt)");
+    Note("off (Config/gv-autopad-off.txt)");
     return;
   }
   // the player switched the Wii Remote off to play with a GameCube controller (Wii Remote port 1 = None)
   if (Config::GetBase(Config::GetInfoForWiimoteSource(0)) == WiimoteSource::None)
   {
-    NOTICE_LOG_FMT(CORE, "Game Vault auto controller: Wii Remote 1 is set to None by the player, left as set");
+    Note("Wii Remote 1 is set to None by the player, left as set");
     return;
   }
   // a game input profile from the game's settings wins
   if (SConfig::GetInstance().LoadGameIni().GetOrCreateSection("Controls")->Exists("WiimoteProfile1"))
   {
-    NOTICE_LOG_FMT(CORE, "Game Vault auto controller: the game's settings name a Wii Remote profile, left as set");
+    Note("the game's settings name a Wii Remote profile, left as set");
     return;
   }
   const char pick = LookUp(game_id);
   if (!pick)
   {
-    NOTICE_LOG_FMT(CORE, "Game Vault auto controller: {} not in the list, left as set", game_id);
+    Note(fmt::format("{} not in the list ({}GameVault/wii-controls.txt), left as set", game_id, File::GetSysDirectory()));
     return;
   }
 
@@ -116,7 +126,7 @@ void AutoPad(const std::string& game_id)
       Config::SetCurrent(Config::GetInfoForWiimoteSource(i), WiimoteSource::Emulated);
     }
   }
-  NOTICE_LOG_FMT(CORE, "Game Vault auto controller: {} -> {} ({} pad(s))", game_id, done, pads);
+  Note(fmt::format("{} -> {} ({} pad(s))", game_id, done, pads));
 }
 }  // namespace GameVault
 
