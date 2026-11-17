@@ -278,6 +278,11 @@ static void GvOpenLog()
     return;
   const std::wstring logs = shared + L"\\logs";
   CreateDirectoryW(logs.c_str(), nullptr);
+  // the start before this one stays as "- before.log" (Game Vault sends every .log here): a start the console gave
+  // up on ("took too long to start") was overwritten by the next start from the Home screen, so it never reached a
+  // report (JEREMY, EDD, BUTTMANS 11-15/16: "1 failed start before this one", its log gone)
+  MoveFileExW((logs + L"\\Dolphin (GameCube, Wii).log").c_str(),
+              (logs + L"\\Dolphin (GameCube, Wii) - before.log").c_str(), MOVEFILE_REPLACE_EXISTING);
   g_gvlog = _wfsopen((logs + L"\\Dolphin (GameCube, Wii).log").c_str(), L"w", _SH_DENYWR);
   SetUnhandledExceptionFilter(GvCrashFilter);
   std::set_terminate([] {
