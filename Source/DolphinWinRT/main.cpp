@@ -456,6 +456,18 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
       if (!g_activated.IsSet())
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    if (m_link_pending)
+    {
+      // let the shown window run ~10 frames first, so the console counts the start as done before the slow part
+      for (int frame = 0; frame < 10; frame++)
+      {
+        CoreWindow::GetForCurrentThread().Dispatcher().ProcessEvents(
+            winrt::Windows::UI::Core::CoreProcessEventsOption::ProcessAllIfPresent);
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+      }
+      m_link_pending = false;
+      StartFromLink();
+    }
 
     auto navigation = winrt::Windows::UI::Core::SystemNavigationManager::GetForCurrentView();
     navigation.BackRequested(
@@ -775,6 +787,35 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
       return;
     }
 
+    // Game Vault: show the window and return at once. Settings, controllers and opening the game took long enough
+    // on an Xbox One X or a slow USB drive that the console gave up first ("took too long to start"); the first
+    // activation's setup now runs in Run() once the window is live (same fix as RetroArch 1.22.2.108).
+    CoreWindow::GetForCurrentThread().Activate();
+    m_link_path = filePath.str();
+    m_link_fsr = gv_fsr;
+    m_link_fsr_pct = gv_fsr_pct;
+    if (!g_activated.IsSet() || m_link_pending)   // a second activation before setup ran: newest link wins
+    {
+      GvLog("step: window shown, setup continues after a few frames");
+      m_link_pending = true;
+      g_activated.Set();
+      return;
+    }
+    StartFromLink();   // a later activation while Dolphin already runs
+  }
+
+  // Game Vault: the setup and game start that used to run inside OnActivate (before the window was shown)
+  std::string m_link_path;
+  bool m_link_fsr = false;
+  int m_link_fsr_pct = 0;
+  bool m_link_pending = false;
+
+  void StartFromLink()
+  {
+    const bool gv_fsr = m_link_fsr;
+    const int gv_fsr_pct = m_link_fsr_pct;
+    std::stringstream filePath;
+    filePath << m_link_path;
     Core::DeclareAsHostThread();
 
     GvLog(fmt::format("link: game \"{}\", shared file {}, back to {}, file calls through the broker {}",
@@ -828,10 +869,6 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
     {
       InitializeDolphinFromFile(gamePath);
     }
-
-    CoreWindow window = CoreWindow::GetForCurrentThread();
-    window.Activate();
-    g_activated.Set();
   }
 
   void EnteredBackground(const IInspectable&,
