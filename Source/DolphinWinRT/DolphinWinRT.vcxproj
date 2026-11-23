@@ -130,6 +130,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="UWPFileRedirect.cpp" />
+    <ClCompile Include="ModuleThrow.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- Non-Sys files -->

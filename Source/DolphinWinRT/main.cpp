@@ -40,6 +40,7 @@
 #include "VideoCommon/Present.h"
 
 #include "Common/FileUtil.h"
+#include "Common/StringUtil.h"
 #include "Common/IOFile.h"
 #include "Common/IniFile.h"
 #include "Common/WindowSystemInfo.h"
@@ -191,6 +192,53 @@ static void GvLog(const std::string& line)
   GvLogRaw((stamp + line + "\n").c_str());
 }
 
+// A launcher in the package may start Dolphin from this module (DolphinTopMain, beside WinMain) and pass this table.
+struct DolphinBaseApi
+{
+  uint32_t size, version;
+  void (*log)(const wchar_t* line);
+  const char* (*av_version_info)();
+  const wchar_t* local_folder;
+  uint8_t* top_base;
+  uint64_t top_size;
+  const wchar_t* top_version;
+  const wchar_t* top_from;
+  void (*mark_good)();
+  void (*set_crash_filter)(long (*filter)(void* exception_pointers));
+};
+static const DolphinBaseApi* g_base = nullptr;
+
+// the module an address belongs to (name and start), also for code Windows did not load itself
+static HMODULE GvModuleAt(const void* addr, char* name, size_t n)
+{
+  HMODULE mod = nullptr;
+  std::snprintf(name, n, "?");
+  if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         static_cast<LPCSTR>(addr), &mod))
+  {
+    GetModuleFileNameA(mod, name, static_cast<DWORD>(n));
+  }
+  else if (g_base && g_base->version >= 2 && g_base->top_base &&
+           static_cast<const uint8_t*>(addr) >= g_base->top_base &&
+           static_cast<const uint8_t*>(addr) < g_base->top_base + g_base->top_size)
+  {
+    mod = reinterpret_cast<HMODULE>(g_base->top_base);
+    std::snprintf(name, n, "DolphinTop.dll");
+  }
+  return mod;
+}
+
+// how the last run ended (LocalState\run_state.txt): running, closed, suspended or crashed
+static void GvRunState(const char* state)
+{
+  if (FILE* f = std::fopen((UWP::GetLocalFolder() + "\\run_state.txt").c_str(), "w"))
+  {
+    std::fputs(state, f);
+    std::fflush(f);
+    std::fclose(f);
+  }
+}
+
 static std::wstring GvSharedFolder()
 {
   try
@@ -212,13 +260,8 @@ static void GvLogCalls(CONTEXT ctx)
   {
     DWORD64 image = 0;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(ctx.Rip, &image, nullptr);
-    char where[MAX_PATH] = "?";
-    HMODULE mod = nullptr;
-    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                           reinterpret_cast<LPCSTR>(ctx.Rip), &mod))
-    {
-      GetModuleFileNameA(mod, where, MAX_PATH);
-    }
+    char where[MAX_PATH];
+    HMODULE mod = GvModuleAt(reinterpret_cast<const void*>(ctx.Rip), where, MAX_PATH);
     const char* short_name = std::strrchr(where, '\\');
     std::snprintf(text, sizeof(text), "  call %d: %s+0x%llX\n", i, short_name ? short_name + 1 : where,
                   static_cast<unsigned long long>(ctx.Rip - reinterpret_cast<DWORD64>(mod)));
@@ -240,13 +283,9 @@ static void GvLogCalls(CONTEXT ctx)
 static LONG WINAPI GvCrashFilter(EXCEPTION_POINTERS* info)
 {
   const auto* rec = info->ExceptionRecord;
-  char module[MAX_PATH] = "?";
-  HMODULE base = nullptr;
-  if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                         static_cast<LPCSTR>(rec->ExceptionAddress), &base))
-  {
-    GetModuleFileNameA(base, module, MAX_PATH);
-  }
+  GvRunState("crashed");
+  char module[MAX_PATH];
+  HMODULE base = GvModuleAt(rec->ExceptionAddress, module, MAX_PATH);
   const char* name = std::strrchr(module, '\\');
   char text[512];
   std::snprintf(text, sizeof(text),
@@ -285,12 +324,32 @@ static void GvOpenLog()
               (logs + L"\\Dolphin (GameCube, Wii) - before.log").c_str(), MOVEFILE_REPLACE_EXISTING);
   g_gvlog = _wfsopen((logs + L"\\Dolphin (GameCube, Wii).log").c_str(), L"w", _SH_DENYWR);
   SetUnhandledExceptionFilter(GvCrashFilter);
+  if (g_base && g_base->version >= 2 && g_base->set_crash_filter)  // Windows skips a filter in this module then
+    g_base->set_crash_filter([](void* p) { return GvCrashFilter(static_cast<EXCEPTION_POINTERS*>(p)); });
   std::set_terminate([] {
     GvLog("stopped: an error nobody caught (std::terminate)");
     std::abort();
   });
+  GvRunState("running");
   const auto v = winrt::Windows::ApplicationModel::Package::Current().Id().Version();
-  GvLog(fmt::format("Dolphin for Game Vault {}.{}.{}.{} starting", v.Major, v.Minor, v.Build, v.Revision));
+  if (g_base && g_base->version >= 2 && g_base->top_version)
+  {
+    GvLog(fmt::format("Dolphin for Game Vault {} starting ({}, package {}.{}.{}.{})",
+                      WStringToUTF8(g_base->top_version), WStringToUTF8(g_base->top_from), v.Major, v.Minor,
+                      v.Build, v.Revision));
+    std::thread([] {
+      std::this_thread::sleep_for(std::chrono::seconds(45));
+      if (g_base->mark_good)
+      {
+        g_base->mark_good();
+        GvLog("up for 45 s: this version marked good");
+      }
+    }).detach();
+  }
+  else
+  {
+    GvLog(fmt::format("Dolphin for Game Vault {}.{}.{}.{} starting", v.Major, v.Minor, v.Build, v.Revision));
+  }
 }
 
 // Dolphin's own notices and errors (panic alerts are logged as errors) go into the start log too. The log manager
@@ -711,6 +770,7 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
   void OnClosed(const IInspectable&, const winrt::Windows::UI::Core::CoreWindowEventArgs& args)
   {
     GvLog("closed");
+    GvRunState("closed");
     GvStartGood();
     g_shutdown_requested.Set();
   }
@@ -887,6 +947,7 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
     auto& system = Core::System::GetInstance();
     NOTICE_LOG_FMT(CORE, "Game Vault trace: Suspending");
     GvLog("suspending (closed by the console or the player)");
+    GvRunState("suspended");
     GvStartGood();
 
     // The Series S/X quits fast, so let's immediately shutdown to ensure all the caches save.
@@ -931,6 +992,12 @@ int WINAPIV WinMain()
   winrt::uninit_apartment();
 
   return 0;
+}
+
+extern "C" __declspec(dllexport) int DolphinTopMain(const UWP::DolphinBaseApi* api)
+{
+  UWP::g_base = api;
+  return WinMain();
 }
 
 std::vector<std::string> Host_GetPreferredLocales()
