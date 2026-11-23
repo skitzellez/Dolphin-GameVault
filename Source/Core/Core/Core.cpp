@@ -13,6 +13,8 @@
 #include <utility>
 #include <variant>
 
+#include <chrono>
+
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 
@@ -873,10 +875,60 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
 
 // --- Callbacks for backends / engine ---
 
+// Game Vault tracker (like the trackers of RPCS3 Spartan Test, XBSX2 and Xenia for Game Vault): the time between
+// shown frames, the frame rate and the speed. A frame shown over 50 ms after the one before is a slow frame. "could
+// run at" is how fast Dolphin would go with no waiting (under 100% = the Xbox CPU is too slow for the game there; at
+// 100%+ with slow frames = the GPU or a shader build held it). A line every 60 s, every 10 s while frames are slow.
+// NOTICE goes to the Dolphin log Game Vault sends with its reports.
+static void GvTracker()
+{
+  using Clock = std::chrono::steady_clock;
+  static Clock::time_point s_last, s_line, s_sample;
+  static u32 s_frames = 0, s_slow = 0, s_samples = 0;
+  static double s_worst = 0, s_speed = 0, s_max = 0, s_fps = 0;
+  const Clock::time_point now = Clock::now();
+  const auto ms = [](Clock::duration d) { return std::chrono::duration<double, std::milli>(d).count(); };
+  const double gap = ms(now - s_last);
+  s_last = now;
+  if (s_line == Clock::time_point{} || gap > 2000)  // first frame, or after a pause or the menu: a new count
+  {
+    s_line = s_sample = now;
+    s_frames = s_slow = s_samples = 0;
+    s_worst = s_speed = s_max = s_fps = 0;
+    return;
+  }
+  s_frames++;
+  s_worst = std::max(s_worst, gap);
+  if (gap > 50)
+    s_slow++;
+  if (ms(now - s_sample) >= 500)
+  {
+    s_sample = now;
+    s_samples++;
+    s_fps += g_perf_metrics.GetFPS();
+    s_speed += g_perf_metrics.GetSpeed();
+    s_max += g_perf_metrics.GetMaxSpeed();
+  }
+  if (ms(now - s_line) < (s_slow ? 10000 : 60000) || !s_samples)
+    return;
+  const double n = s_samples, could = s_max / n * 100;
+  NOTICE_LOG_FMT(CORE,
+                 "Game Vault: frame rate {:.0f}, speed {:.0f}%, could run at {:.0f}%, worst frame {:.0f} ms, "
+                 "slow frames {} of {}{}",
+                 s_fps / n, s_speed / n * 100, could, s_worst, s_slow, s_frames,
+                 !s_slow       ? "" :
+                 could < 95    ? ", held by the CPU (emulation too slow here)" :
+                                 ", held by the GPU or a shader build (emulation had time to spare)");
+  s_line = now;
+  s_frames = s_slow = s_samples = 0;
+  s_worst = s_speed = s_max = s_fps = 0;
+}
+
 // Called from Renderer::Swap (GPU thread) when a frame is presented to the host screen.
 void Callback_FramePresented(const PresentInfo& present_info)
 {
   g_perf_metrics.CountFrame();
+  GvTracker();
 
   if (present_info.reason == PresentInfo::PresentReason::VideoInterfaceDuplicate)
     return;

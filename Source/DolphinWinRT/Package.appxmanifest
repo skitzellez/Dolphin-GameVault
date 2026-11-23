@@ -9,7 +9,7 @@
 	<Identity
     Name="GamerDad.DolphinForGameVault"
     Publisher="CN=GamerDad"
-    Version="1.1.9.130" />
+    Version="1.1.9.131" />
   <mp:PhoneIdentity PhoneProductId="5cf0a5ca-18d0-474c-88f6-a43117a219d0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
 	<Properties>
