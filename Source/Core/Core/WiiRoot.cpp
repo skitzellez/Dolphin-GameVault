@@ -361,7 +361,54 @@ void InitializeWiiFileSystemContents(
       save_redirect->m_target_path = s_temp_redirect_root;
     }
 
-    if (!File::IsDirectory(save_redirect->m_target_path))
+    bool made_here = false;   // (made by the check below: still new, so the game's save is cloned into it)
+#ifdef WINRT_XBOX
+    // Dolphin for Game Vault: an Xbox app may read a USB drive but not write it (only Game Vault gets those rights),
+    // so a Riivolution mod's save folder there ("riivolution/save/RetroWFC/RMCE": Retro Rewind) cannot be made
+    // ("Could not write to Wii system memory"). The save then lives in Dolphin's own storage, still apart from the
+    // game's own save: User/RiivolutionSaves/<the same path, ':' as '_'>.
+    if (!is_temp_nand)
+    {
+      const std::string& wanted = save_redirect->m_target_path;
+      bool writable = false;
+      const bool existed = File::IsDirectory(wanted);
+      if (existed || (made_here = File::CreateDirs(wanted)))
+      {
+        const std::string probe = wanted + "/.gv-write-test";
+        {
+          File::IOFile f(probe, "wb");
+          writable = f.IsOpen();
+        }
+        if (writable)
+          File::Delete(probe);
+      }
+      if (!writable)
+      {
+        std::string local = wanted;
+        for (char& c : local)
+        {
+          if (c == ':')
+            c = '_';
+          else if (c == '\\')
+            c = '/';
+        }
+        local = File::GetUserPath(D_USER_IDX) + "RiivolutionSaves/" + local;
+        NOTICE_LOG_FMT(CORE, "Riivolution save folder {} is not writable here: using {}", wanted, local);
+        save_redirect->m_target_path = local;
+        made_here = false;
+      }
+    }
+#endif
+
+    if (made_here)
+    {
+      if (save_redirect->m_clone)
+      {
+        File::Copy(Common::GetTitleDataPath(title_id, Common::FromWhichRoot::Session),
+                   save_redirect->m_target_path);
+      }
+    }
+    else if (!File::IsDirectory(save_redirect->m_target_path))
     {
       File::CreateDirs(save_redirect->m_target_path);
       if (save_redirect->m_clone)

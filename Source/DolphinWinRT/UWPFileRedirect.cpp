@@ -243,6 +243,15 @@ BOOL WINAPI ReplaceFileW_FromApp(LPCWSTR replaced, LPCWSTR replacement, LPCWSTR 
    return ReplaceFileFromAppW(Plain(replaced), Plain(replacement), Plain(backup), flags, exclude, reserved);
 }
 
+/* std::filesystem::copy_file (File::Copy: a Riivolution mod's save cloned onto a USB drive) */
+HRESULT WINAPI CopyFile2_FromApp(PCWSTR from, PCWSTR to, COPYFILE2_EXTENDED_PARAMETERS *params)
+{
+   BOOL fail_if_exists = params && (params->dwCopyFlags & COPY_FILE_FAIL_IF_EXISTS);
+   if (CopyFileFromAppW(Plain(from), Plain(to), fail_if_exists))
+      return S_OK;
+   return HRESULT_FROM_WIN32(GetLastError());
+}
+
 struct Redirect
 {
    const char *name;
@@ -265,6 +274,7 @@ const Redirect kRedirects[] = {
    { "MoveFileExW",          (void*)MoveFileExW_FromApp },
    { "MoveFileW",            (void*)MoveFileW_FromApp },
    { "ReplaceFileW",         (void*)ReplaceFileW_FromApp },
+   { "CopyFile2",            (void*)CopyFile2_FromApp },
 };
 
 } // namespace
@@ -313,13 +323,16 @@ extern "C" unsigned uwp_redirect_file_apis(void *module)
    return count;
 }
 
-/* The C and C++ runtimes (std::filesystem lives in msvcp140) and Dolphin itself (this module, which is not always
-   the process's .exe), once at start-up. */
+/* The C and C++ runtimes (std::filesystem lives in msvcp140; an Xbox app loads the store build, msvcp140_app.dll,
+   which was missing here: folders and copies on a USB drive failed, e.g. a Riivolution mod's save folder - Retro
+   Rewind's "Could not write to Wii system memory") and Dolphin itself (this module, which is not always the
+   process's .exe), once at start-up. */
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 extern "C" void uwp_redirect_file_apis_startup(void)
 {
    static const wchar_t *const modules[] = {
-      L"ucrtbase.dll", L"ucrtbased.dll", L"msvcrt.dll", L"msvcp140.dll", L"msvcp140d.dll", NULL
+      L"ucrtbase.dll", L"ucrtbased.dll", L"msvcrt.dll", L"msvcp140.dll", L"msvcp140d.dll",
+      L"msvcp140_app.dll", L"msvcp140d_app.dll", NULL
    };
    unsigned n = uwp_redirect_file_apis((HMODULE)&__ImageBase);
    for (int i = 0; modules[i]; i++)
