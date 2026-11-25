@@ -420,16 +420,41 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
        use_dual_source ? D3D11_BLEND_INV_SRC1_ALPHA : D3D11_BLEND_INV_SRC_ALPHA,
        D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_INV_DEST_ALPHA}};
 
+  // Game Vault: D3D11 refuses a *_COLOR factor in the alpha slots (E_INVALIDARG, "Creating D3D blend state failed:
+  // The parameter is incorrect"; Mario Kart Wii on a Series S, 11-25), and the assert below then waits on a box no
+  // one can answer on an Xbox. For the alpha channel a colour factor is the same as its alpha one, so swap it.
+  const auto alpha_slot = [](D3D11_BLEND b) {
+    switch (b)
+    {
+    case D3D11_BLEND_SRC_COLOR:
+      return D3D11_BLEND_SRC_ALPHA;
+    case D3D11_BLEND_INV_SRC_COLOR:
+      return D3D11_BLEND_INV_SRC_ALPHA;
+    case D3D11_BLEND_DEST_COLOR:
+      return D3D11_BLEND_DEST_ALPHA;
+    case D3D11_BLEND_INV_DEST_COLOR:
+      return D3D11_BLEND_INV_DEST_ALPHA;
+    default:
+      return b;
+    }
+  };
   tdesc.SrcBlend = src_factors[u32(state.srcfactor.Value())];
-  tdesc.SrcBlendAlpha = src_factors[u32(state.srcfactoralpha.Value())];
+  tdesc.SrcBlendAlpha = alpha_slot(src_factors[u32(state.srcfactoralpha.Value())]);
   tdesc.DestBlend = dst_factors[u32(state.dstfactor.Value())];
-  tdesc.DestBlendAlpha = dst_factors[u32(state.dstfactoralpha.Value())];
+  tdesc.DestBlendAlpha = alpha_slot(dst_factors[u32(state.dstfactoralpha.Value())]);
   tdesc.BlendOp = state.subtract ? D3D11_BLEND_OP_REV_SUBTRACT : D3D11_BLEND_OP_ADD;
   tdesc.BlendOpAlpha = state.subtractAlpha ? D3D11_BLEND_OP_REV_SUBTRACT : D3D11_BLEND_OP_ADD;
 
   ComPtr<ID3D11BlendState> res;
   HRESULT hr = D3D::device->CreateBlendState(&desc, res.GetAddressOf());
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D blend state failed: {}", DX11HRWrap(hr));
+  if (FAILED(hr))
+  {
+    // Game Vault: log it and draw with the default blend instead of stopping on an assert box
+    ERROR_LOG_FMT(VIDEO, "Game Vault: D3D blend state {:08x} failed: {} (src {} {} dst {} {})", state.hex,
+                  DX11HRWrap(hr), int(tdesc.SrcBlend), int(tdesc.SrcBlendAlpha), int(tdesc.DestBlend),
+                  int(tdesc.DestBlendAlpha));
+    return nullptr;
+  }
   return m_blend.emplace(state.hex, std::move(res)).first->second.Get();
 }
 
