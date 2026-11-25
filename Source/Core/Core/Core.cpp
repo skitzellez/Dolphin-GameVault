@@ -95,6 +95,8 @@
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/OnScreenDisplay.h"
+#include "Common/Config/Config.h"
+#include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/PerformanceMetrics.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoEvents.h"
@@ -121,6 +123,7 @@ static std::unique_ptr<MemoryWatcher> s_memory_watcher;
 #endif
 
 void Callback_FramePresented(const PresentInfo& present_info);
+static void GvNoPictureReset();
 
 struct HostJob
 {
@@ -588,6 +591,14 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
       g_shader_cache->InitializeShaderCache();
   }
 
+  GvNoPictureReset();
+  {
+    const SurfaceInfo surface = g_gfx ? g_gfx->GetSurfaceInfo() : SurfaceInfo{};
+    NOTICE_LOG_FMT(VIDEO, "Game Vault: video backend {}, picture surface {}, {}x{}{}",
+                   g_video_backend->GetName(), g_gfx && !g_gfx->IsHeadless() ? "yes" : "NONE",
+                   surface.width, surface.height, video_started_here ? "" : " (kept from before)");
+  }
+
   if (cpu_info.HTT)
     Config::SetBaseOrCurrent(Config::MAIN_DSP_THREAD, cpu_info.num_cores > 4);
   else
@@ -924,11 +935,41 @@ static void GvTracker()
   s_worst = s_speed = s_max = s_fps = 0;
 }
 
+// Game Vault: a game can run with sound and controls but no picture when the graphics backend has nowhere to draw
+// (a Series S player on D3D12, 11-25: "frame rate 0", nothing else in the log; D3D11 showed the game). Dolphin then
+// skips drawing every frame, so its frame counter never moves. After 300 frames with no picture: say so in the log
+// and, on D3D12, set D3D11 for the next start (the player only sees one black start, not every start).
+static u32 s_gv_presents = 0;
+static bool s_gv_picture_checked = false;
+static void GvNoPictureReset()
+{
+  s_gv_presents = 0;
+  s_gv_picture_checked = false;
+}
+static void GvNoPictureCheck()
+{
+  if (s_gv_picture_checked || ++s_gv_presents < 300)
+    return;
+  s_gv_picture_checked = true;
+  if (g_perf_metrics.GetFPS() >= 1.0)
+    return;
+  const std::string name = g_video_backend ? g_video_backend->GetName() : "";
+  ERROR_LOG_FMT(VIDEO, "Game Vault: no picture after 300 frames on {} (picture surface {})", name,
+                g_gfx && !g_gfx->IsHeadless() ? "yes" : "NONE");
+  if (name == "D3D12")
+  {
+    Config::SetBase(Config::MAIN_GFX_BACKEND, "D3D");
+    Config::Save();
+    ERROR_LOG_FMT(VIDEO, "Game Vault: video backend set to D3D (D3D11) for the next start");
+  }
+}
+
 // Called from Renderer::Swap (GPU thread) when a frame is presented to the host screen.
 void Callback_FramePresented(const PresentInfo& present_info)
 {
   g_perf_metrics.CountFrame();
   GvTracker();
+  GvNoPictureCheck();
 
   if (present_info.reason == PresentInfo::PresentReason::VideoInterfaceDuplicate)
     return;
