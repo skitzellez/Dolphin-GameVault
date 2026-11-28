@@ -11,6 +11,7 @@
 #include <mach/mach.h>
 #endif
 
+#include "Common/Align.h"
 #include "Common/CommonTypes.h"
 #include "Common/DynamicLibrary.h"
 
@@ -184,6 +185,18 @@ public:
     const size_t block_index = offset / BLOCK_SIZE;
     if (m_writable_block_handles[block_index] == nullptr)
       MakeMemoryBlockWritable(block_index);
+#endif
+  }
+
+  void EnsureMemoryPagesWritable(size_t offset, size_t size)
+  {
+#ifdef _WIN32
+    const size_t end_offset = offset + size;
+    for (size_t i = Common::AlignDown(offset, BLOCK_SIZE); i < end_offset;
+         i += BLOCK_SIZE)
+    {
+      EnsureMemoryPageWritable(i);
+    }
 #endif
   }
 

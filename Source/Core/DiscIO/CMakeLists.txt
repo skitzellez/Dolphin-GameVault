@@ -1,6 +1,8 @@
 add_library(discio
   Blob.cpp
   Blob.h
+  CachedBlob.cpp
+  CachedBlob.h
   CISOBlob.cpp
   CISOBlob.h
   CompressedBlob.cpp

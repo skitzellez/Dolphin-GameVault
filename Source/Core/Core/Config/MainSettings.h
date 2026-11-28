@@ -371,6 +371,8 @@ extern const Info<std::string> MAIN_WII_SPEAK_MICROPHONE;
 extern const Info<bool> MAIN_WII_SPEAK_MUTED;
 extern const Info<s16> MAIN_WII_SPEAK_VOLUME_MODIFIER;
 
+extern const Info<std::string> MAIN_TRIFORCE_IP_REDIRECTIONS;
+
 // GameCube path utility functions
 
 // Replaces NTSC-K with some other region, and doesn't replace non-NTSC-K regions
