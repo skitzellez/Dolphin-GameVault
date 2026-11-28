@@ -302,6 +302,8 @@ add_library(core
   HW/Triforce/DeckReader.h
   HW/Triforce/FZeroAX.cpp
   HW/Triforce/FZeroAX.h
+  HW/Triforce/GameVaultCamera.cpp
+  HW/Triforce/GameVaultCamera.h
   HW/Triforce/ICCardReader.cpp
   HW/Triforce/ICCardReader.h
   HW/Triforce/IOPorts.cpp

@@ -343,6 +343,7 @@
     <ClInclude Include="Core\HW\SystemTimers.h" />
     <ClInclude Include="Core\HW\Triforce\DeckReader.h" />
     <ClInclude Include="Core\HW\Triforce\FZeroAX.h" />
+    <ClInclude Include="Core\HW\Triforce\GameVaultCamera.h" />
     <ClInclude Include="Core\HW\Triforce\ICCardReader.h" />
     <ClInclude Include="Core\HW\Triforce\IOPorts.h" />
     <ClInclude Include="Core\HW\Triforce\JVSIO.h" />
@@ -1040,6 +1041,7 @@
     <ClCompile Include="Core\HW\SystemTimers.cpp" />
     <ClCompile Include="Core\HW\Triforce\DeckReader.cpp" />
     <ClCompile Include="Core\HW\Triforce\FZeroAX.cpp" />
+    <ClCompile Include="Core\HW\Triforce\GameVaultCamera.cpp" />
     <ClCompile Include="Core\HW\Triforce\ICCardReader.cpp" />
     <ClCompile Include="Core\HW\Triforce\IOPorts.cpp" />
     <ClCompile Include="Core\HW\Triforce\JVSIO.cpp" />

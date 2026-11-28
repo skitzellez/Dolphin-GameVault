@@ -24,6 +24,7 @@
 #include "Core/CoreTiming.h"
 #include "Core/HLE/HLE.h"
 #include "Core/HW/EXI/EXI_DeviceBaseboard.h"
+#include "Core/HW/Triforce/GameVaultCamera.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/Network/Socket.h"
 #include "Core/Movie.h"
@@ -430,6 +431,7 @@ static void TestHwPhase2Callback(Core::System& system, u64 userdata, s64 cycles_
 
 void Init()
 {
+  Triforce::GameVaultCamera::Start();
   s_media_buffer_32.fill(0);
   s_exec1_last_response.fill(0);
   s_exec2_last_response.fill(0);
@@ -483,7 +485,9 @@ void Init()
 
   if (!File::Exists(sega_boot_filename))
   {
-    PanicAlertFmt("Failed to open segaboot.gcm({}), which is required for test menus.",
+    // Game Vault: only the test menus need it and the game boots without it; a pop-up here stops the game
+    // (on an Xbox no one can answer it), so it is logged instead.
+    WARN_LOG_FMT(DVDINTERFACE, "segaboot.gcm not found ({}); games boot without it, only the test menus need it.",
                   sega_boot_filename.c_str());
     return;
   }
@@ -578,6 +582,17 @@ std::string IPRedirection::ToString() const
 IPRedirections GetIPRedirections()
 {
   IPRedirections result;
+
+  // Game Vault: the built-in camera comes first, so the cabinet camera answers (Mario Kart GP).
+  if (const auto camera = Triforce::GameVaultCamera::GetRedirection())
+  {
+    const auto parts = ParseIPRedirection(*camera);
+    const auto original = parts ? Common::StringToIPv4PortRange(parts->original) : std::nullopt;
+    const auto replacement =
+        parts ? Common::StringToIPv4PortRange(parts->replacement) : std::nullopt;
+    if (original && replacement)
+      result.emplace_back(*original, *replacement);
+  }
 
   const auto ip_redirections_str = Config::Get(Config::MAIN_TRIFORCE_IP_REDIRECTIONS);
   for (auto&& ip_pair : ip_redirections_str | std::views::split(','))
@@ -1218,7 +1233,17 @@ static void WriteGuestFdSetFromPollFds(u32 guest_fds_offset, std::span<const WSA
 
   for (const auto& fd : fds)
   {
-    if ((fd.revents & returned_events) == 0)
+    // Game Vault: select() counts a closed or failed connection as readable (recv then returns 0
+    // or the error), but Windows' WSAPoll reports it only as POLLHUP / POLLERR, without POLLIN.
+    // Mario Kart Arcade GP read its camera picture, then waited forever for "readable" to see the
+    // end of it and showed CAMERA ERROR.
+    short revents = fd.revents;
+    if ((fd.events & POLLIN) && (revents & (POLLHUP | POLLERR)))
+      revents |= POLLIN;
+    if ((fd.events & POLLOUT) && (revents & POLLERR))
+      revents |= POLLOUT;
+
+    if ((revents & returned_events) == 0)
       continue;
 
     const auto guest_socket = GetGuestSocket(fd.fd);
@@ -2357,6 +2382,7 @@ void Shutdown()
   s_dimm_disc.reset();
 
   CloseAllSockets();
+  Triforce::GameVaultCamera::Stop();
 }
 
 void DoState(PointerWrap& p)
